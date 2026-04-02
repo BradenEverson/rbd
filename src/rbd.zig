@@ -1,4 +1,4 @@
-//! Redundant Block Diagram high level graph
+//! Reliability Block Diagram high level graph
 //! A node can either be a series, parallel, or root module with a fixed reliability
 //!
 //! - series reliability is the product of all module reliabilities in the system
