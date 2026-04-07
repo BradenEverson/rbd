@@ -13,8 +13,8 @@ pub const BlockNode = union(enum) {
 
     pub fn deinit(self: *BlockNode, alloc: std.mem.Allocator) void {
         switch (self.*) {
-            .series => |s| s.deinit(alloc),
-            .parallel => |p| p.deinit(alloc),
+            .series => |*s| s.deinit(alloc),
+            .parallel => |*p| p.deinit(alloc),
             .module => {},
         }
     }
@@ -32,6 +32,7 @@ pub const Series = struct {
     series: std.ArrayList(BlockNode) = .{},
 
     pub fn deinit(self: *Series, alloc: std.mem.Allocator) void {
+        for (self.series.items) |*c| c.deinit(alloc);
         self.series.deinit(alloc);
     }
 
@@ -53,6 +54,7 @@ pub const Parallel = struct {
     parallel: std.ArrayList(BlockNode) = .{},
 
     pub fn deinit(self: *Parallel, alloc: std.mem.Allocator) void {
+        for (self.parallel.items) |*c| c.deinit(alloc);
         self.parallel.deinit(alloc);
     }
 

@@ -7,29 +7,82 @@ pub fn main() !void {
 
     const alloc = gpa.allocator();
 
-    const A = rbd.BlockNode{ .module = 0.96 };
-    const B = rbd.BlockNode{ .module = 0.92 };
-    const C = rbd.BlockNode{ .module = 0.99 };
+    var args = std.process.args();
+    _ = args.skip();
 
-    var AB_series = rbd.Series{};
-    defer AB_series.deinit(alloc);
+    var data: []u8 = undefined;
+    if (args.next()) |file_path| {
+        data = std.fs.cwd().readFileAlloc(alloc, file_path, 65536) catch {
+            std.debug.print("Error: File does not exist!\n", .{});
+            std.process.exit(1);
+        };
+    } else {
+        std.debug.print("Usage: ./rbd file.rbd\n", .{});
+        std.process.exit(1);
+    }
+    defer alloc.free(data);
 
-    try AB_series.add(alloc, A);
-    try AB_series.add(alloc, B);
+    var lines = std.mem.tokenizeAny(u8, data, "\n");
+    var diagram = try parseNode(alloc, &lines);
+    defer diagram.deinit(alloc);
 
-    var AB_par = rbd.Parallel{};
-    defer AB_par.deinit(alloc);
+    std.debug.print("Reliability: {:.2}%\n", .{diagram.getReliability() * 100});
+}
 
-    try AB_par.add(alloc, rbd.BlockNode{ .series = AB_series });
-    try AB_par.add(alloc, rbd.BlockNode{ .series = AB_series });
+const ParseError = error{
+    EmptyFile,
+    ImproperArgs,
+    UnknownNodeType,
+};
 
-    var graph_series = rbd.Series{};
-    defer graph_series.deinit(alloc);
+const AllParseErrors = ParseError || std.fmt.ParseFloatError || std.fmt.ParseIntError || std.mem.Allocator.Error;
 
-    try graph_series.add(alloc, rbd.BlockNode{ .parallel = AB_par });
-    try graph_series.add(alloc, C);
+fn parseNode(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any)) AllParseErrors!rbd.BlockNode {
+    const line = lines.next() orelse return error.EmptyFile;
+    const stripped = std.mem.trim(u8, line, " \t");
 
-    const graph = rbd.BlockNode{ .series = graph_series };
+    var args = std.mem.tokenizeAny(u8, stripped, " \t");
 
-    std.debug.print("Reliability: {}\n", .{graph.getReliability() * 100});
+    const node_type = args.next() orelse return error.ImproperArgs;
+    const node_arg = args.next() orelse return error.ImproperArgs;
+
+    if (std.mem.eql(u8, node_type, "series")) {
+        const count = try std.fmt.parseInt(usize, node_arg, 10);
+        return parseSeries(alloc, lines, count);
+    } else if (std.mem.eql(u8, node_type, "parallel")) {
+        const count = try std.fmt.parseInt(usize, node_arg, 10);
+        return parseParallel(alloc, lines, count);
+    } else if (std.mem.eql(u8, node_type, "mod")) {
+        const reliabilty = try std.fmt.parseFloat(f32, node_arg);
+
+        return .{ .module = reliabilty };
+    } else {
+        return error.UnknownNodeType;
+    }
+}
+
+fn parseSeries(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), count: usize) !rbd.BlockNode {
+    var series = rbd.Series{};
+
+    for (0..count) |_| {
+        var node = try parseNode(alloc, lines);
+        errdefer node.deinit(alloc);
+
+        try series.add(alloc, node);
+    }
+
+    return .{ .series = series };
+}
+
+fn parseParallel(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), count: usize) !rbd.BlockNode {
+    var parallel = rbd.Parallel{};
+
+    for (0..count) |_| {
+        var node = try parseNode(alloc, lines);
+        errdefer node.deinit(alloc);
+
+        try parallel.add(alloc, node);
+    }
+
+    return .{ .parallel = parallel };
 }

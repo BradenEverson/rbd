@@ -1,0 +1,9 @@
+series 2
+    parallel 2
+        series 2
+            mod 0.96
+            mod 0.92
+        series 2
+            mod 0.96
+            mod 0.92
+    mod 0.99
