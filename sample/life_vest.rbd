@@ -1,5 +1,5 @@
-series 2
-    mod 0.999
-    parallel 2
-        mod 0.98
-        mod 0.98
+series
+ mod 0.999
+  parallel
+   mod 0.98
+   mod 0.98

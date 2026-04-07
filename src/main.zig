@@ -23,7 +23,7 @@ pub fn main() !void {
     defer alloc.free(data);
 
     var lines = std.mem.tokenizeAny(u8, data, "\n");
-    var diagram = try parseNode(alloc, &lines);
+    var diagram = try parseNode(alloc, &lines, 0);
     defer diagram.deinit(alloc);
 
     std.debug.print("Reliability: {:.2}%\n", .{diagram.getReliability() * 100});
@@ -37,22 +37,22 @@ const ParseError = error{
 
 const AllParseErrors = ParseError || std.fmt.ParseFloatError || std.fmt.ParseIntError || std.mem.Allocator.Error;
 
-fn parseNode(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any)) AllParseErrors!rbd.BlockNode {
-    const line = lines.next() orelse return error.EmptyFile;
-    const stripped = std.mem.trim(u8, line, " \t");
+fn isWhitespace(char: u8) bool {
+    return (char == ' ') or (char == '\t');
+}
 
-    var args = std.mem.tokenizeAny(u8, stripped, " \t");
+fn parseNode(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), level: usize) AllParseErrors!rbd.BlockNode {
+    const line = lines.next() orelse return error.EmptyFile;
+    var args = std.mem.tokenizeAny(u8, line[level..], " \t");
 
     const node_type = args.next() orelse return error.ImproperArgs;
-    const node_arg = args.next() orelse return error.ImproperArgs;
 
     if (std.mem.eql(u8, node_type, "series")) {
-        const count = try std.fmt.parseInt(usize, node_arg, 10);
-        return parseSeries(alloc, lines, count);
+        return parseSeries(alloc, lines, level);
     } else if (std.mem.eql(u8, node_type, "parallel")) {
-        const count = try std.fmt.parseInt(usize, node_arg, 10);
-        return parseParallel(alloc, lines, count);
+        return parseParallel(alloc, lines, level);
     } else if (std.mem.eql(u8, node_type, "mod")) {
+        const node_arg = args.next() orelse return error.ImproperArgs;
         const reliabilty = try std.fmt.parseFloat(f32, node_arg);
 
         return .{ .module = reliabilty };
@@ -61,11 +61,11 @@ fn parseNode(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any)) 
     }
 }
 
-fn parseSeries(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), count: usize) !rbd.BlockNode {
+fn parseSeries(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), level: usize) !rbd.BlockNode {
     var series = rbd.Series{};
 
-    for (0..count) |_| {
-        var node = try parseNode(alloc, lines);
+    while (lines.peek() != null and isWhitespace(lines.peek().?[level])) {
+        var node = try parseNode(alloc, lines, level + 1);
         errdefer node.deinit(alloc);
 
         try series.add(alloc, node);
@@ -74,11 +74,11 @@ fn parseSeries(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any)
     return .{ .series = series };
 }
 
-fn parseParallel(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), count: usize) !rbd.BlockNode {
+fn parseParallel(alloc: std.mem.Allocator, lines: *std.mem.TokenIterator(u8, .any), level: usize) !rbd.BlockNode {
     var parallel = rbd.Parallel{};
 
-    for (0..count) |_| {
-        var node = try parseNode(alloc, lines);
+    while (lines.peek() != null and isWhitespace(lines.peek().?[level])) {
+        var node = try parseNode(alloc, lines, level + 1);
         errdefer node.deinit(alloc);
 
         try parallel.add(alloc, node);

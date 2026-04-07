@@ -1,7 +1,7 @@
-parallel 2
-    series 2
-        mod 0.99
-        mod 0.99
-    series 2
-        mod 0.99
-        mod 0.99
+parallel
+ series
+  mod 0.99
+  mod 0.99
+ series
+  mod 0.99
+  mod 0.99
