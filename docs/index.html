@@ -1,0 +1,45 @@
+<html>
+<body>
+    <textarea id="rbdInput" rows="10" cols="50"></textarea><br>
+    <button onclick="submitText()">Submit and Eval</button>
+
+    <script>
+        let wasmInstance;
+        let wasmMemory;
+
+        async function runWasm() {
+            wasmMemory = new WebAssembly.Memory({ initial: 256 });
+            const importObject = {
+                env: {
+                    memory: wasmMemory,
+                    log_js: (ptr, len) => {
+                        const buf = new Uint8Array(wasmMemory.buffer, ptr, len);
+                        console.log(new TextDecoder().decode(buf));
+                    }
+                }
+            };
+
+            const { instance } = await WebAssembly.instantiateStreaming(
+                fetch('wasm/rbd_wasm.wasm'), 
+                importObject
+            );
+            wasmInstance = instance;
+        }
+
+        function submitText() {
+            const code = document.getElementById('rbdInput').value;
+            const encoder = new TextEncoder();
+            const encodedCode = encoder.encode(code);
+
+            const ptr = wasmInstance.exports.alloc(encodedCode.length);
+            new Uint8Array(wasmMemory.buffer).set(encodedCode, ptr);
+            const result = wasmInstance.exports.buildRbdAndEval(ptr, encodedCode.length);
+            
+            alert("Reliability: " + result.toFixed(4) * 100 + "%");
+        }
+
+        runWasm();
+    </script>
+</body>
+</html>
+

@@ -1,5 +1,6 @@
 //! Wasm Entrypoint
 
+const parser = @import("parser.zig");
 const std = @import("std");
 const allocator = std.heap.wasm_allocator;
 
@@ -11,6 +12,24 @@ pub fn log(comptime fmt: []const u8, args: anytype) void {
     log_js(string.ptr, string.len);
 }
 
-export fn hello() void {
-    log("Hello!\n", .{});
+export fn alloc(len: usize) [*]u8 {
+    const buf = allocator.alloc(u8, len) catch @panic("out of memory");
+    return buf.ptr;
+}
+
+export fn free(ptr: [*]u8, len: usize) void {
+    allocator.free(ptr[0..len]);
+}
+
+export fn buildRbdAndEval(str: [*]u8, len: usize) f32 {
+    const data: []const u8 = str[0..len];
+    defer allocator.free(data);
+
+    var graph = parser.parseSerializedRbd(allocator, data) catch |err| {
+        log("Building RBG Failed!\nError: {any}\n", .{err});
+        return -1.0;
+    };
+    defer graph.deinit(allocator);
+
+    return graph.getReliability();
 }
