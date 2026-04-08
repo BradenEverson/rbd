@@ -1,0 +1,33 @@
+<html>
+<body>
+    <script>
+        function log(mem, ptr, len) {
+          const buffer = new Uint8Array(mem.buffer, ptr, len);
+          console.log(new TextDecoder().decode(buffer));
+        }
+
+        async function runWasm() {
+            const memory = new WebAssembly.Memory({ 
+                initial: 256, 
+            });
+
+            const importObject = {
+                env: {
+                    memory: memory,
+                    log_js: (ptr, len) => log(memory, ptr, len)
+                }
+            };
+
+            const { instance } = await WebAssembly.instantiateStreaming(
+                fetch('wasm/rbd_wasm.wasm'), 
+                importObject
+            );
+
+            instance.exports.hello();
+        }
+
+        runWasm();
+    </script>
+</body>
+</html>
+
